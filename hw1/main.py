@@ -58,4 +58,4 @@ if __name__ == '__main__':
 
     # Explore different embeddings
     # uncomment the following line to run
-    explore_embeddings(dev_data, train_data, test_data)
+    #explore_embeddings(dev_data, train_data, test_data)

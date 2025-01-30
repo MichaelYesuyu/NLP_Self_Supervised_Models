@@ -123,3 +123,5 @@ def run_all_basics_demo():
     tensor_operations()
     math_operations()
     torch_numpy()
+
+run_all_basics_demo()
