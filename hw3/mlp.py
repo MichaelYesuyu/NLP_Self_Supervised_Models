@@ -49,16 +49,16 @@ def featurize(sentence: str, embeddings: gensim.models.keyedvectors.KeyedVectors
     # map each word to its embedding
     for word in word_tokenize(sentence.lower()):
         try:
-            vectors.append(embeddings[word])
+            vectors.append(torch.from_numpy(embeddings[word]))
         except KeyError:
             pass
 
-    # TODO (Copy from your HW1): complete the function to compute the average embedding of the sentence
-    # your return should be
-    # None - if the vector sequence is empty, i.e. the sentence is empty or None of the words in the sentence is in the embedding vocabulary
-    # A torch tensor of shape (embed_dim,) - the average word embedding of the sentence
-    # Hint: follow the hints in the pdf description
-    raise NotImplementedError
+    if len(vectors) == 0:
+        return None
+    vector_sum = torch.stack(vectors)
+    average = torch.mean(vector_sum, dim=0)
+    return average
+
 
 
 def create_tensor_dataset(raw_data: Dict[str, List[Union[int, str]]],
@@ -66,9 +66,12 @@ def create_tensor_dataset(raw_data: Dict[str, List[Union[int, str]]],
     all_features, all_labels = [], []
     for text, label in tqdm(zip(raw_data['text'], raw_data['label'])):
 
-        # TODO (Copy from your HW1): complete the for loop to featurize each sentence
+        # TODO: complete the for loop to featurize each sentence
         # only add the feature and label to the list if the feature is not None
-        raise NotImplementedError
+        feature = featurize(text, embeddings)
+        if feature is not None:
+            all_features.append(feature)
+            all_labels.append(label)
         # your code ends here
 
     # stack all features and labels into two single tensors and create a TensorDataset
@@ -76,6 +79,7 @@ def create_tensor_dataset(raw_data: Dict[str, List[Union[int, str]]],
     labels_tensor = torch.tensor(all_labels, dtype=torch.long)
 
     return TensorDataset(features_tensor, labels_tensor)
+
 
 def create_dataloader(dataset: TensorDataset, batch_size: int, shuffle: bool = True) -> DataLoader:
     return DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
@@ -91,6 +95,12 @@ class SentimentClassifier(nn.Module):
         # activation function
         if activation == 'Sigmoid':
             self.activation = nn.Sigmoid()
+        elif activation == 'ReLU':
+            self.activation = nn.ReLU()
+        elif activation == 'Tanh':
+            self.activation = nn.Tanh()
+        elif activation == 'GeLU':
+            self.activation = nn.GELU()
         else:
             raise NotImplementedError
 
@@ -105,7 +115,13 @@ class SentimentClassifier(nn.Module):
         # Hint:
         # - Remember to consider the case when there are no hidden layers (i.e. hidden_dims is an empty list)
         #       in this case, it essentially degrades to the architecture we used in hw 1
-        raise NotImplementedError
+        if not hidden_dims:
+            self.linears.append(nn.Linear(embed_dim, num_classes))
+        else:
+            self.linears.append(nn.Linear(embed_dim, hidden_dims[0]))
+            for i in range(len(hidden_dims) - 1):
+                self.linears.append(nn.Linear(hidden_dims[i], hidden_dims[i+1]))
+            self.linears.append(nn.Linear(hidden_dims[-1],num_classes))
         # your code ends here
 
         self.loss = nn.CrossEntropyLoss(reduction='mean')
@@ -114,19 +130,24 @@ class SentimentClassifier(nn.Module):
 
         # TODO: complete the forward function
         # Hint remember to apply the activation function to all hidden layers except the last one
-        raise NotImplementedError
-        # your code ends here
-
+        for i, layer in enumerate(self.linears):
+            inp = layer(inp)
+            if i < len(self.linears) - 1:
+                inp = self.activation(inp)
+        logits = inp
         return logits
 
 
 def accuracy(logits: torch.FloatTensor, labels: torch.LongTensor) -> torch.FloatTensor:
     assert logits.shape[0] == labels.shape[0]
-    # TODO (Copy from your HW1): complete the function to compute the accuracy
+    # TODO: complete the function to compute the accuracy
     # Hint: follow the hints in the pdf description, the return should be a tensor of 0s and 1s with the same shape as labels
     # labels is a tensor of shape (batch_size,)
     # logits is a tensor of shape (batch_size, num_classes)
-    raise NotImplementedError
+    max_indices = torch.max(logits, dim=1)[1]
+    accuracy = (max_indices == labels).float()
+    return accuracy
+
 
 
 def evaluate(model: SentimentClassifier, eval_dataloader: DataLoader) -> Tuple[float, float]:
